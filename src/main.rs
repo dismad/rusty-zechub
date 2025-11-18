@@ -1,5 +1,5 @@
 use bip0039::{Count, English, Mnemonic};
-use curl::easy::Easy;
+use curl::easy::{Auth, Easy};
 use dialoguer::Select;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -28,7 +28,6 @@ struct BlockSupplyInfo {
     value_pools: Vec<NodeData>,
 }
 
-
 #[derive(Serialize, Deserialize, Debug)]
 struct SupplyInfo {
     #[serde(alias = "chainValue")]
@@ -43,7 +42,10 @@ struct NodeData {
     monitored: bool,
 }
 
+#[derive(Clone)]
 pub struct NodeConnection {
+    username: String,
+    password: String,
     url: String,
     port: i32,
 }
@@ -71,6 +73,14 @@ impl NodeConnection {
         easy.url(&self.display()).unwrap();
         easy.post(true).unwrap();
         easy.post_field_size(body.len() as u64).unwrap();
+
+        // Set up basic authentication with username and password
+        easy.username(&self.username).unwrap();
+        easy.password(&self.password).unwrap();
+        
+        let mut auth = Auth::new();
+        auth.basic(true);
+        easy.http_auth(&auth).unwrap();
 
         // Set the Content-Type header to application/json
         let mut list = curl::easy::List::new();
@@ -113,15 +123,17 @@ impl NodeConnection {
 
 fn main() {
     let my_connection = NodeConnection {
+        username: String::from("__cookie__"),
+        password: String::from("passwordfromcookiehere"),
         url: String::from("http://127.0.0.1"),
         port: 8232,
     };
-    let myserver = my_connection.init();
+    my_connection.init();
 
-    display_menu(myserver).unwrap();
+    display_menu(my_connection).unwrap();
 }
 
-fn display_menu(myserver: String) -> Result<()> {
+fn display_menu(myserver: NodeConnection) -> Result<()> {
     let mymenu = "\nRusty-Zechub";
 
     let opts = [
@@ -177,7 +189,7 @@ fn display_menu(myserver: String) -> Result<()> {
                 .read_line(&mut input) // The read_line function reads data until it reaches a '\n' character
                 .expect("Unable to read Stdin"); // In case the read operation fails, it panics with the given message
             clear_terminal_screen();
-            deserialize_at_block(myserver,&input.trim().to_string()).unwrap();
+            deserialize_at_block(myserver, &input.trim().to_string()).unwrap();
         }
         5 => {
             //List transactions at block
@@ -238,8 +250,8 @@ fn display_menu(myserver: String) -> Result<()> {
             std::io::stdin() // Get the standard input stream
                 .read_line(&mut input) // The read_line function reads data until it reaches a '\n' character
                 .expect("Unable to read Stdin"); // In case the read operation fails, it panics with the given message
-
-            getblock(myserver, &input.trim().to_string(),false).unwrap();
+            clear_terminal_screen();
+            getblock(myserver, &input.trim().to_string(), false).unwrap();
         }
         10 => {
             // block date
@@ -251,7 +263,6 @@ fn display_menu(myserver: String) -> Result<()> {
                 .expect("Unable to read Stdin"); // In case the read operation fails, it panics with the given message
             clear_terminal_screen();
             block_date(myserver, &input.trim().to_string()).unwrap();
-            
         }
         11 => {
             // peer details
@@ -270,23 +281,31 @@ fn display_menu(myserver: String) -> Result<()> {
 
     Ok(())
 }
-fn display_mnemonic(myaddress: String) -> Result<()> {
+fn display_mnemonic(myaddress: NodeConnection) -> Result<()> {
     let my_mnemonic: Mnemonic<English> = Mnemonic::generate(Count::Words24);
     let mn_str = my_mnemonic.into_phrase();
     println!("Phrase: {}\n", mn_str);
     display_menu(myaddress).unwrap();
     Ok(())
 }
-fn visualize_mempool(myaddress: String) -> Result<()> {
+fn visualize_mempool(myaddress: NodeConnection) -> Result<()> {
     let mymethod = "getrawmempool";
     let mut body =
         r#"{"jsonrpc":"1.0", "id": "curltest", "method":"getrawmempool","params":[true]}"#
             .as_bytes();
 
+    //let test = myaddress.init();
     let mut easy = Easy::new();
-    easy.url(&myaddress).unwrap();
+    easy.url(&myaddress.display()).unwrap();
     easy.post(true).unwrap();
     easy.post_field_size(body.len() as u64).unwrap();
+
+    // Set up basic authentication with username and password
+    easy.username(&myaddress.username).unwrap(); // Replace with actual username
+    easy.password(&myaddress.password).unwrap(); // Replace with actual password
+    let mut auth = Auth::new();
+    auth.basic(true);
+    easy.http_auth(&auth).unwrap();
 
     // Set the Content-Type header to application/json
     let mut list = curl::easy::List::new();
@@ -369,7 +388,7 @@ fn visualize_mempool(myaddress: String) -> Result<()> {
     display_menu(myaddress).unwrap();
     Ok(())
 }
-fn getblockchaininfo(myaddress: String, no_output: bool) {
+fn getblockchaininfo(myaddress: NodeConnection, no_output: bool) {
     /*
 
     curl -s --data-binary '{"jsonrpc": "1.0", "id":"curltest", "method": "getinfo", "params": [] }' -H 'content-type: application/json' http://127.0.0.1:8232/
@@ -381,9 +400,15 @@ fn getblockchaininfo(myaddress: String, no_output: bool) {
             .as_bytes();
 
     let mut easy = Easy::new();
-    easy.url(&myaddress).unwrap();
+    easy.url(&myaddress.display()).unwrap();
     easy.post(true).unwrap();
     easy.post_field_size(body.len() as u64).unwrap();
+
+    easy.username(&myaddress.username).unwrap(); // Replace with actual username
+    easy.password(&myaddress.password).unwrap(); // Replace with actual password
+    let mut auth = Auth::new();
+    auth.basic(true);
+    easy.http_auth(&auth).unwrap();
 
     // Set the Content-Type header to application/json
     let mut list = curl::easy::List::new();
@@ -459,7 +484,7 @@ fn getblockchaininfo(myaddress: String, no_output: bool) {
         display_menu(myaddress).unwrap();
     }
 }
-fn deserialize(myaddress: String) -> Result<()> {
+fn deserialize(myaddress: NodeConnection) -> Result<()> {
     getblockchaininfo(myaddress.clone(), true);
 
     let file_path = "new.json";
@@ -477,7 +502,10 @@ fn deserialize(myaddress: String) -> Result<()> {
     let orchard_supply = p.value_pools[3].chain_value;
     let lockbox_supply = p.value_pools[4].chain_value;
 
-    println!("At block: {:#?}\n-------------------------------------------------", p.blocks);
+    println!(
+        "At block: {:#?}\n-------------------------------------------------",
+        p.blocks
+    );
     println!("Size of Zebra node on disk  | {:#?} bytes", p.size_on_disk);
     println!("ZEC in the Transparent Pool | {:#?} ", transparent_supply);
     println!("ZEC in the Sprout Pool      | {:#?}", sprout_supply);
@@ -492,7 +520,7 @@ fn deserialize(myaddress: String) -> Result<()> {
     display_menu(myaddress).unwrap();
     Ok(())
 }
-fn tx_details(myaddress: String, txid: &str, no_output: bool) -> Result<()> {
+fn tx_details(myaddress: NodeConnection, txid: &str, no_output: bool) -> Result<()> {
     let mymethod = "getrawtransaction";
     let body_string = format!(
         "{{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"{}\", \"params\": [\"{}\",1]}}",
@@ -501,9 +529,15 @@ fn tx_details(myaddress: String, txid: &str, no_output: bool) -> Result<()> {
     let mut body = body_string.as_bytes();
 
     let mut easy = Easy::new();
-    easy.url(&myaddress).unwrap();
+    easy.url(&myaddress.display()).unwrap();
     easy.post(true).unwrap();
     easy.post_field_size(body.len() as u64).unwrap();
+
+    easy.username(&myaddress.username).unwrap(); // Replace with actual username
+    easy.password(&myaddress.password).unwrap(); // Replace with actual password
+    let mut auth = Auth::new();
+    auth.basic(true);
+    easy.http_auth(&auth).unwrap();
 
     // Set the Content-Type header to application/json
     let mut list = curl::easy::List::new();
@@ -583,25 +617,30 @@ fn tx_details(myaddress: String, txid: &str, no_output: bool) -> Result<()> {
     }
     Ok(())
 }
-fn getblock(myaddress: String, block: &str, no_output: bool) -> Result<()> {
+fn getblock(myaddress: NodeConnection, block: &str, no_output: bool) -> Result<()> {
     let mymethod = "getblock";
     let body_string = format!(
-        "{{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"{}\", \"params\": [\"{}\",1]}}",  //Use 2 here for verbose details
+        "{{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"{}\", \"params\": [\"{}\",1]}}", //Use 2 here for verbose details
         mymethod, block
     );
 
-     if no_output {
-    } else {
-        println!("in function: {}", body_string);
-    }
+    //if no_output {
+    //} else {
+    //    println!("in function: {}", body_string);
+    //}
 
     let mut body = body_string.as_bytes();
 
     let mut easy = Easy::new();
-    easy.url(&myaddress).unwrap();
+    easy.url(&myaddress.display()).unwrap();
     easy.post(true).unwrap();
     easy.post_field_size(body.len() as u64).unwrap();
 
+    easy.username(&myaddress.username).unwrap(); // Replace with actual username
+    easy.password(&myaddress.password).unwrap(); // Replace with actual password
+    let mut auth = Auth::new();
+    auth.basic(true);
+    easy.http_auth(&auth).unwrap();
     // Set the Content-Type header to application/json
     let mut list = curl::easy::List::new();
     list.append("Content-Type: application/json").unwrap();
@@ -665,7 +704,6 @@ fn getblock(myaddress: String, block: &str, no_output: bool) -> Result<()> {
     //Read jq .result output.json into a String
     stdout.read_to_string(&mut buffer).expect("test");
 
-
     if no_output {
     } else {
         println!("\n{}", buffer);
@@ -682,7 +720,7 @@ fn getblock(myaddress: String, block: &str, no_output: bool) -> Result<()> {
 
     Ok(())
 }
-fn getpeerinfo(myaddress: String) -> Result<()> {
+fn getpeerinfo(myaddress: NodeConnection) -> Result<()> {
     let mymethod = "getpeerinfo";
     let body_string = format!(
         "{{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"{}\", \"params\": []}}",
@@ -691,9 +729,15 @@ fn getpeerinfo(myaddress: String) -> Result<()> {
     let mut body = body_string.as_bytes();
 
     let mut easy = Easy::new();
-    easy.url(&myaddress).unwrap();
+    easy.url(&myaddress.display()).unwrap();
     easy.post(true).unwrap();
     easy.post_field_size(body.len() as u64).unwrap();
+
+    easy.username(&myaddress.username).unwrap(); // Replace with actual username
+    easy.password(&myaddress.password).unwrap(); // Replace with actual password
+    let mut auth = Auth::new();
+    auth.basic(true);
+    easy.http_auth(&auth).unwrap();
 
     // Set the Content-Type header to application/json
     let mut list = curl::easy::List::new();
@@ -829,7 +873,7 @@ fn cleanup() -> Result<()> {
 fn clear_terminal_screen() {
     clearscreen::clear().unwrap();
 }
-fn tx_type(myaddress: String, tx_json: &str) -> Result<()> {
+fn tx_type(myaddress: NodeConnection, tx_json: &str) -> Result<()> {
     // Open output.json with jq to make pretty
     let mut get_type_child = Command::new("bash");
 
@@ -841,9 +885,8 @@ fn tx_type(myaddress: String, tx_json: &str) -> Result<()> {
     display_menu(myaddress).unwrap();
     Ok(())
 }
-fn tx_date(myaddress: String, tx_json: &str) -> Result<()> {
-
-        // Open output.json with jq to make pretty
+fn tx_date(myaddress: NodeConnection, tx_json: &str) -> Result<()> {
+    // Open output.json with jq to make pretty
     let mut get_date_child = Command::new("bash");
 
     get_date_child.arg("getDateFromTX.sh").arg(tx_json);
@@ -854,8 +897,8 @@ fn tx_date(myaddress: String, tx_json: &str) -> Result<()> {
     display_menu(myaddress).unwrap();
     Ok(())
 }
-fn block_date(myaddress: String, block: &str) -> Result<()> {
-        // Open output.json with jq to make pretty
+fn block_date(myaddress: NodeConnection, block: &str) -> Result<()> {
+    // Open output.json with jq to make pretty
     let mut get_date_child = Command::new("bash");
 
     get_date_child.arg("getDateFromBlock.sh").arg(block);
@@ -866,11 +909,10 @@ fn block_date(myaddress: String, block: &str) -> Result<()> {
     display_menu(myaddress).unwrap();
     Ok(())
 }
-fn deserialize_at_block(myaddress: String, block: &str) -> Result<()> {
-
+fn deserialize_at_block(myaddress: NodeConnection, block: &str) -> Result<()> {
     //getblockchaininfo(myaddress.clone(), true);
 
-    getblock(myaddress.clone(), block,true).unwrap();
+    getblock(myaddress.clone(), block, true).unwrap();
 
     let file_path = "block_new.json";
     //let my_json = input.clone();
@@ -887,7 +929,10 @@ fn deserialize_at_block(myaddress: String, block: &str) -> Result<()> {
     let orchard_supply = p.value_pools[3].chain_value;
     let lockbox_supply = p.value_pools[4].chain_value;
 
-    println!("At block: {:#?}\n-------------------------------------------------", p.height);
+    println!(
+        "At block: {:#?}\n-------------------------------------------------",
+        p.height
+    );
     println!("ZEC in the Transparent Pool | {:#?} ", transparent_supply);
     println!("ZEC in the Sprout Pool      | {:#?}", sprout_supply);
     println!("ZEC in the Sapling Pool     | {:#?}", sapling_supply);
@@ -897,9 +942,8 @@ fn deserialize_at_block(myaddress: String, block: &str) -> Result<()> {
     display_menu(myaddress).unwrap();
     Ok(())
 }
-fn list_transactions(myaddress: String,block: &str) -> Result<()> {
-    getblock(myaddress.clone(), block,true).unwrap();
-
+fn list_transactions(myaddress: NodeConnection, block: &str) -> Result<()> {
+    getblock(myaddress.clone(), block, true).unwrap();
 
     let mut jq_child = Command::new("/usr/bin/jq")
         .arg(".tx | reverse[]")
@@ -915,9 +959,8 @@ fn list_transactions(myaddress: String,block: &str) -> Result<()> {
     //Read jq .result output.json into a String
     stdout.read_to_string(&mut buffer).expect("test");
 
-   
     println!("{}", buffer);
-    
+
     display_menu(myaddress).unwrap();
     Ok(())
 }
