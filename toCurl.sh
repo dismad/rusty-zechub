@@ -8,53 +8,52 @@ arg4="${5}"      #4 represents 4th argument
 arg5="${6}"      #4 represents 4th argument
 
 
-if pgrep "runzenith" > /dev/null; then
+if pgrep "zenithserver" > /dev/null; then
 
       # Zenith RPC
 	user="user"           #set your  username
-	pw=""      #set your  pw
+	pw="superSecret"      #set your  pw
 	port="8234" 
 else
 	# Zebra
 	user="__cookie__"                                     #set your  username
-	pw=""      #set your  pw
+	pw=$(cat ~/.cache/zebra/.cookie | cut -d ":" -f2-)
+      #set your  pw
 	port="8232"                                            #set your port 
 fi
 
+#Zallet
+#port="8237"
 
 credentials="$user:$pw"
 
-# Zebra
-#user="__cookie__"                                     #set your  username
-#pw=""      #set your  pw
-#port="8232"                                            #set your port 
-
-# Zcashd
-#user="zk"                                     #set your  username
-#pw=""      #set your  pw
-#port="8232"
 
 
 # Cases
 
 if [ "$command" == "getmetrics" ]; then
 	myCurl="curl -s --data-binary '{\"jsonrpc\": \"2.0\", \"id\":0, \"method\": \"$command\", \"params\": [] }' -H 'content-type: application/json' http://127.0.0.1:$port"
-elif [ "$command" == "getrawmempool" ]; then
+elif [ "$command" == "getrawmempool" ] || [ "$command" == "getblocksubsidy" ]; then
         myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [$arg1] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
 elif [ "$command" == "sendmany" ]; then
-	 myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [$arg1, \"$arg2\", [{\"address\": \"$arg3\", \"amount\": $arg4, \"memo\": \"$arg5\"}]] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
+	myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [$arg1, \"$arg2\", [{\"address\": \"$arg3\", \"amount\": $arg4, \"memo\": \"$arg5\"}]] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
+elif [ "$command" == "z_sendmany" ]; then
+	myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [\"$arg1\", [{\"address\": \"$arg2\", \"amount\": $arg3, \"memo\": \"$arg4\"}]] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
+elif [ "$command" == "z_gettotalbalance" ]; then
+	myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [$arg1, $arg2] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
 elif [ -n "$arg1" ]; then
         if [ -n "$arg2" ]; then
 		myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [\"$arg1\", $arg2] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
-        else
+        else 
 		myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [\"$arg1\"] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
         fi
 else
+	
         myCurl="curl -s -u $credentials --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", \"method\": \"$command\", \"params\": [] }' -H 'content-type: application/json' http://127.0.0.1:$port/"
 fi
 
-#echo $myCurl
+#echo "$myCurl"
 
-eval $myCurl | jq .result
+eval "$myCurl" | jq .result
 
 
