@@ -2,9 +2,11 @@ use bip0039::{Count, English, Mnemonic};
 use curl::easy::{Auth, Easy};
 use dialoguer::Select;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Result, Write};
 use std::path::Path;
+use std::path::PathBuf;
 use std::process;
 use std::process::{Command, Stdio};
 //use clap::{command, Arg};
@@ -57,7 +59,32 @@ impl NodeConnection {
 }
 
 impl NodeConnection {
-    fn init(&self) -> String {
+    fn init(&mut self) -> Result<()> {
+
+        // Example path with tilde
+        let path_str = "~/.cache/zebra/.cookie";
+
+        // Manually expand tilde (simplified; assumes it starts with ~/ )
+        let expanded_path: PathBuf = if path_str.starts_with("~/") {
+            let home = std::env::home_dir().expect("No home directory found");
+            home.join(&path_str[2..])  // Skip the "~/"
+        } else {
+            PathBuf::from(path_str)
+        };
+
+        // Read the entire file content
+        let content = fs::read_to_string(expanded_path)?;
+       
+        // Find the first occurrence of ':' and extract everything after it
+        if let Some(pos) = content.find(':') {
+            let after_colon: String = content[pos + 1..].trim().to_string();
+            
+            self.password = after_colon;
+            self.username = "__cookie__".to_string();
+        } else {
+            println!("No cookie file found!");
+        }
+
         println!(
             "\nAttempting to connect to Zebrad @ {}:{}\n.\n.\n.",
             self.url, self.port
@@ -75,9 +102,10 @@ impl NodeConnection {
         easy.post_field_size(body.len() as u64).unwrap();
 
         // Set up basic authentication with username and password
+        //easy.username("__cookie__").unwrap();  // Replace with actual username
         easy.username(&self.username).unwrap();
         easy.password(&self.password).unwrap();
-        
+        //easy.password("Isb0KANr/GqlC6vmDhoDsJCZJ6iIhzMG+Lb9osg1Zgc=").unwrap();  // Replace with actual password
         let mut auth = Auth::new();
         auth.basic(true);
         easy.http_auth(&auth).unwrap();
@@ -117,20 +145,27 @@ impl NodeConnection {
             println!("No response!");
         }
 
-        self.display()
+        self.display();
+
+        Ok(())
+
     }
 }
 
-fn main() {
-    let my_connection = NodeConnection {
-        username: String::from("__cookie__"),
-        password: String::from("passwordfromcookiehere"),
+fn main() -> Result<()> {
+
+   
+    let mut my_connection = NodeConnection {
+        username: String::from(""),
+        password: String::from(""),
         url: String::from("http://127.0.0.1"),
         port: 8232,
     };
-    my_connection.init();
+    my_connection.init().unwrap();
 
     display_menu(my_connection).unwrap();
+
+    Ok(())
 }
 
 fn display_menu(myserver: NodeConnection) -> Result<()> {
