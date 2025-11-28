@@ -102,10 +102,9 @@ impl NodeConnection {
         easy.post_field_size(body.len() as u64).unwrap();
 
         // Set up basic authentication with username and password
-        //easy.username("__cookie__").unwrap();  // Replace with actual username
         easy.username(&self.username).unwrap();
         easy.password(&self.password).unwrap();
-        //easy.password("Isb0KANr/GqlC6vmDhoDsJCZJ6iIhzMG+Lb9osg1Zgc=").unwrap();  // Replace with actual password
+     
         let mut auth = Auth::new();
         auth.basic(true);
         easy.http_auth(&auth).unwrap();
