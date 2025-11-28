@@ -36,11 +36,6 @@ listen_addr = "127.0.0.1:8232"
 enable_cookie_auth = true
 ```
 
-Set your cookie pw here:
-
-<img width="802" height="238" alt="Screenshot_2025-11-18_15-28-39" src="https://github.com/user-attachments/assets/1f9d4907-316e-4726-8d2d-d63a687c9173" />
-
-
 * Start zebra:
   
   `zebrad start`
