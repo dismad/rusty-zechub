@@ -1,42 +1,38 @@
 #!/bin/bash
 
-txID="${1}"   #1 represent 1st argument
-isDebug="${2}"   #2 represent 1st argument
+
+txID=$(cat txid_new.json | jq -r .txid)
+block=$(cat txid_new.json | jq .height)
 
 
-txidJSON=$txID
-txID=$(cat $txidJSON | jq -r .txid)
-block=$(cat $txidJSON | jq .height)
-
-
-transparent=$(cat $txidJSON | jq .vout[].scriptPubKey.type)
+transparent=$(cat txid_new.json | jq .vout[].scriptPubKey.type)
 transparent=("${transparent[@]}")
-transparent2=$(cat $txidJSON | jq .vin[].txid | wc -l )
-transparent3=$(cat $txidJSON | jq .vout[].value)
+transparent2=$(cat txid_new.json | jq .vin[].txid | wc -l )
+transparent3=$(cat txid_new.json | jq .vout[].value)
+sprout=$(cat txid_new.json | jq .vjoinsplit)
+sapling1=$(cat txid_new.json | jq .vShieldedSpend)
+sapling2=$(cat txid_new.json | jq .vShieldedOutput)
+orchard1=$(cat txid_new.json | jq -r '.orchard.actions | select( . != null )')
 
-sprout=$(cat $txidJSON | jq .vjoinsplit)
-
-sapling1=$(cat $txidJSON | jq .vShieldedSpend)
-sapling2=$(cat $txidJSON | jq .vShieldedOutput)
-
-orchard1=$(cat $txidJSON | jq -r '.orchard.actions | select( . != null )')
 
 
 # Get Value Out
-saplingValueOut=$(cat $txidJSON | jq .valueBalance)
-orchardValueOut=$(cat $txidJSON | jq .orchard.valueBalance)
-transparentValueOut=$(cat $txidJSON | jq .vout[].valueZat | paste -sd+ | bc)
+saplingValueOut=$(cat txid_new.json | jq .valueBalance)
+orchardValueOut=$(cat txid_new.json | jq .orchard.valueBalance)
+transparentValueOut=$(cat txid_new.json | jq .vout[].valueZat | paste -sd+ | bc)
 
 
 
-isCoinbase=$(cat $txidJSON | jq .vin[] | grep coinbase)
+isCoinbase=$(cat txid_new.json | jq .vin[] | grep coinbase)
 
 
 
 if [ -n "$isCoinbase" ] && [ "$isCoinbase" != "[]" ];then
         lockbox=$(./toCurl.sh getblocksubsidy | jq .lockboxstreams[].valueZat)
+        isCoinbase="IsCoinbase"
 else
-	lockbox="0"
+        lockbox=$(printf '%0f' 0.0)
+	#lockbox="0"
 fi
 
 
@@ -62,6 +58,8 @@ finalSapling=$(sed -E 's/([+-]?[0-9.]+)[eE]\+?(-?)([0-9]+)/(\1*10^\2\3)/g' <<<"$
 finalOrchard=$(sed -E 's/([+-]?[0-9.]+)[eE]\+?(-?)([0-9]+)/(\1*10^\2\3)/g' <<<"$orchardValueOut" | bc)
 finalTransparent=$(sed -E 's/([+-]?[0-9.]+)[eE]\+?(-?)([0-9]+)/(\1*10^\2\3)/g' <<<"$transparentValueOut" | bc)
 
+#echo "$test | $test2 | $test3 | $lockbox"
+
 # Filter
 
 s1=0 #saplingSpend
@@ -71,6 +69,7 @@ t1=0 #transparent
 c1=0 #sprout
 n1=0 #orchard
 
+#result="$block | $txID "
 
 if [[ "$transparent" == *"\"pubkeyhash\""* ]] || [[ "$transparent" == *"\"scripthash\""* ]]; then
     t1=1
@@ -118,6 +117,12 @@ fi
 
 myResult=""
 
+#echo "test: $test"
+#echo "test2: $test2"
+#echo "test3: $test3"
+#echo "lockbox: $lockbox"
+
+
 
 if [[ t1 -eq 1 ]]; then
    myResult="Transparent"
@@ -163,7 +168,34 @@ else
     :
 fi
 
-# Get Fee
+#Black        0;30     Dark Gray     1;30
+#Red          0;31     Light Red     1;31
+#Green        0;32     Light Green   1;32
+#Brown/Orange 0;33     Yellow        1;33
+#Blue         0;34     Light Blue    1;34
+#Purple       0;35     Light Purple  1;35
+#Cyan         0;36     Light Cyan    1;36
+#Light Gray   0;37     White         1;37
+
+#RED='\033[0;31m'
+#NC='\033[0m' # No Color
+#echo -e "I ${RED}love${NC} Zcash"
+
+NC='\033[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+LIGHTGREEN='\033[0;32m'
+LIGHTBLUE='\033[1;34m'
+LIGHTPURPLE='\033[1;35m'
+LIGHTRED='\033[1;31m'
+LIGHTGRAY='\033[0;37m'
+YELLOW='\033[1;33m'
+ORANGE='\033[0;33m'
+WHITE='\033[1;37m'
+
+
+
 if [ "$isDebug" == "true" ]; then
     fee="Fee n/a"
 else
@@ -171,109 +203,34 @@ else
 fi
 
 # Get transferTX count
-t=$(cat $txidJSON | jq -r '.vout | length' | paste -sd+ | bc)
-o=$(cat $txidJSON | jq .orchard | jq -r '.actions | length' | paste -sd+ | bc)
-s=$(cat $txidJSON | jq -r ' .vShieldedOutput | length ' | paste -sd+ | bc)
+t=$(cat txid_new.json | jq -r '.vout | length' | paste -sd+ | bc)
+o=$(cat txid_new.json | jq .orchard | jq -r '.actions | length' | paste -sd+ | bc)
+s=$(cat txid_new.json | jq -r ' .vShieldedOutput | length ' | paste -sd+ | bc)
 
 myTransferCount=$(echo "$t + $o + $s" | bc)
 
 
-#Find Length of variables for even pad spacing 
-# note: make into single function
-
-padding=15
-len=${#valueOut}
-test=$(( $padding - $len ))
-mypad=""
-while [[ $test -gt 0 ]]
-do
-    mypad="$mypad "
-    test=$(( $test -1 ))
-done
-
-
-padding2=13
-len=${#finalTransparent}
-test2=$(( $padding2 - $len ))
-mypad2=""
-while [[ $test2 -gt 0 ]]
-do
-    mypad2="$mypad2 "
-    test2=$(( $test2 -1 ))
-done
-
-
-padding3=4
-len=${#myTransferCount}
-test3=$(( $padding3 - $len ))
-mypad3=""
-
-while [[ $test3 -gt 0 ]]
-do
-	mypad3="$mypad3 "
-	test3=$(( $test3 -1 ))
-done
-
-padding4=13
-len=${#finalSapling}
-test4=$(( $padding4 - $len ))
-mypad4=""
-while [[ $test4 -gt 0 ]]
-do
-    mypad4="$mypad4 "
-    test4=$(( $test4 -1 ))
-done
-
-padding5=13
-len=${#finalOrchard}
-test5=$(( $padding5 - $len ))
-mypad5=""
-while [[ $test5 -gt 0 ]]
-do
-    mypad5="$mypad5 "
-    test5=$(( $test5 -1 ))
-done
-
-
 # Get date/time
-
-now=$(cat $txidJSON | jq .time)
+now=$(cat txid_new.json | jq .time)
 testTime=$(date -d @$now +%c)
+
+#Find length of vars to adjust for even pad spacing
+mypad=$(./normalizePadding.sh 16 $valueOut)
+mypad2=$(./normalizePadding.sh 16 $finalTransparent)
+mypad3=$(./normalizePadding.sh 4 $myTransferCount)
+mypad4=$(./normalizePadding.sh 16 $finalSapling)
+mypad5=$(./normalizePadding.sh 16 $finalOrchard)
+mypad6=$(./normalizePadding.sh 12 $fee)
+mypad7=$(./normalizePadding.sh 10 $lockbox)
+mypad8=$(./normalizePadding.sh 27 $myResult)
+
 
 
 if [ "$isDebug" == "true" ]; then
 
-	echo -e "$testTime | $block | $txID | $myTransferCount$mypad3 | $fee | $valueOut$mypad | $finalTransparent$mypad2 | $finalSapling$mypad4  | $finalOrchard$mypad5  | $myResult"
-else
-
-    #Black        0;30     Dark Gray     1;30
-    #Red          0;31     Light Red     1;31
-    #Green        0;32     Light Green   1;32
-    #Brown/Orange 0;33     Yellow        1;33
-    #Blue         0;34     Light Blue    1;34
-    #Purple       0;35     Light Purple  1;35
-    #Cyan         0;36     Light Cyan    1;36
-    #Light Gray   0;37     White         1;37
-
-    #RED='\033[0;31m'
-    #NC='\033[0m' # No Color
-    #echo -e "I ${RED}love${NC} Zcash"
-
-    NC='\033[0m'
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    CYAN='\033[0;36m'
-    LIGHTGREEN='\033[0;32m'
-    LIGHTBLUE='\033[1;34m'
-    LIGHTPURPLE='\033[1;35m'
-    LIGHTRED='\033[1;31m'
-    LIGHTGRAY='\033[0;37m'
-    YELLOW='\033[1;33m'
-    ORANGE='\033[0;33m'
-    WHITE='\033[1;37m'
-
-	echo -e "${LIGHTRED}$testTime${NC} | ${CYAN}$block${NC} | ${GREEN}$txID${NC} | ${YELLOW}$myTransferCount${NC}$mypad3 | ${RED}$fee${NC}$mypad6 | ${WHITE}$finalTransparent$mypad2${NC} | ${LIGHTGREEN}$finalSapling$mypad4${NC} | ${LIGHTGRAY}$finalOrchard$mypad5${NC} | ${LIGHTBLUE}$myResult${NC} | ${ORANGE}$isCoinbase${NC}"
+	echo -e "$testTime | $block | $txID | $myTransferCount$mypad3 | $fee | $finalTransparent$mypad2 | $finalSapling$mypad4  | $finalOrchard$mypad5  | $myResult | $isCoinbase"
+else 
+	echo -e "${LIGHTRED}$testTime${NC} | ${CYAN}$block${NC} | ${GREEN}$txID${NC} | ${YELLOW}$myTransferCount${NC}$mypad3 | ${RED}$fee${NC}$mypad6 | ${LIGHTPURPLE}$lockbox${NC}$mypad7 | ${WHITE}$finalTransparent$mypad2${NC} | ${LIGHTGREEN}$finalSapling$mypad4${NC} | ${LIGHTGRAY}$finalOrchard$mypad5${NC} | ${LIGHTBLUE}$myResult$mypad8${NC} | ${ORANGE}$isCoinbase${NC}"
 fi
 
-rm $txidJSON
-
+rm txid_new.json
