@@ -40,11 +40,6 @@ enable_cookie_auth = true
   
   `zebrad start`
 
-* uses `jq` for JSON formatting
-  * `sudo apt install jq`
-
-* `chmod +x getDateFromBlock.sh getDateFromTX.sh getTXfee.sh toCurl.sh tx_type.sh txDetails.sh`
-
 
 
 ![Screenshot_2025-06-24_22-17-48](https://github.com/user-attachments/assets/d42a4f69-c862-4db2-a8d7-04d4f417c6e0)
